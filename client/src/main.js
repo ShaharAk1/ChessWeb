@@ -1,4 +1,5 @@
 import "./styles.css";
+import { Chess } from "chess.js";
 
 const FILLED_GLYPHS = {
   wp: "♟",
@@ -53,11 +54,62 @@ const BOARD_THEMES = [
   { name: "Walnut", light: "#e8dcc8", dark: "#8b6914", border: "#4a3728" }
 ];
 
+function toBoardMap(chess) {
+  const board = {};
+  const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
+
+  for (let rank = 1; rank <= 8; rank += 1) {
+    for (const file of files) {
+      const square = `${file}${rank}`;
+      const piece = chess.get(square);
+      if (piece) board[square] = piece;
+    }
+  }
+
+  return board;
+}
+
+function legalMovesBySquare(chess) {
+  const map = {};
+  chess.moves({ verbose: true }).forEach((move) => {
+    if (!map[move.from]) map[move.from] = [];
+    map[move.from].push(move.to);
+  });
+  return map;
+}
+
+function toState(game) {
+  const chess = game.engine;
+  const result = game.result ?? { status: "ongoing", winner: null, reason: null };
+  const now = Date.now();
+  const hasActiveDrawOffer =
+    Boolean(game.drawOffer?.fromColor) && Number(game.drawOffer?.expiresAt || 0) > now;
+  return {
+    id: game.id,
+    fen: chess.fen(),
+    turn: chess.turn(),
+    history: chess.history(),
+    board: toBoardMap(chess),
+    legalMoves: legalMovesBySquare(chess),
+    isCheck: chess.inCheck(),
+    isCheckmate: chess.isCheckmate(),
+    isDraw: chess.isDraw(),
+    isStalemate: chess.isStalemate(),
+    isInsufficientMaterial: chess.isInsufficientMaterial(),
+    isThreefoldRepetition: chess.isThreefoldRepetition(),
+    isGameOver: chess.isGameOver(),
+    result,
+    hasActiveDrawOffer
+  };
+}
+
 const LS_BOARD = "chessweb_board_theme";
 const LS_PIECE = "chessweb_piece_theme";
 const LS_GAME_IDS = "chessweb_game_ids";
 const LS_PLAYER_ID = "chessweb_player_id";
 const LS_MULTIPLAYER_GAME_ID = "chessweb_multiplayer_game_id";
+
+let localGames = {};
 
 const app = document.querySelector("#app");
 const PAGE_ROUTES = {
@@ -317,10 +369,13 @@ async function api(path, options = {}) {
 
 async function startGame() {
   const pageKey = currentPageKey();
-  const payload = await api("/game/new", { method: "POST" });
-  gameId = payload.gameId;
-  gameState = payload.state;
-  gameIdsByPage[pageKey] = payload.gameId;
+  const gameIdLocal = `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const chess = new Chess();
+  const game = { id: gameIdLocal, engine: chess };
+  localGames[gameIdLocal] = game;
+  gameId = gameIdLocal;
+  gameState = toState(game);
+  gameIdsByPage[pageKey] = gameIdLocal;
   saveGameIds();
   resetSelection();
   render();
@@ -369,6 +424,12 @@ async function joinMultiplayerGameById(rawId) {
 
 async function loadState() {
   if (!gameId) return;
+  if (gameId.startsWith("local-")) {
+    const game = localGames[gameId];
+    if (!game) throw new Error("Local game not found");
+    gameState = toState(game);
+    return;
+  }
   if (currentPageKey() === "multiplayer") {
     const payload = await api("/multiplayer/state", {
       method: "POST",
@@ -479,16 +540,29 @@ async function clickSquare(square) {
     return;
   }
 
-  const path = currentPageKey() === "multiplayer" ? "/multiplayer/move" : "/game/move";
-  const body =
-    currentPageKey() === "multiplayer"
-      ? { gameId, playerId, from: selectedSquare, to: square }
-      : { gameId, from: selectedSquare, to: square };
-  const payload = await api(path, { method: "POST", body });
-  gameState = payload.state;
-  playMoveSound();
-  resetSelection();
-  render();
+  if (gameId.startsWith("local-")) {
+    // Local move
+    const game = localGames[gameId];
+    if (!game) return;
+    const move = game.engine.move({ from: selectedSquare, to: square });
+    if (!move) return;
+    gameState = toState(game);
+    playMoveSound();
+    resetSelection();
+    render();
+  } else {
+    // Server move
+    const path = currentPageKey() === "multiplayer" ? "/multiplayer/move" : "/game/move";
+    const body =
+      currentPageKey() === "multiplayer"
+        ? { gameId, playerId, from: selectedSquare, to: square }
+        : { gameId, from: selectedSquare, to: square };
+    const payload = await api(path, { method: "POST", body });
+    gameState = payload.state;
+    playMoveSound();
+    resetSelection();
+    render();
+  }
 }
 
 function boardStyleAttrs() {
