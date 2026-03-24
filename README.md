@@ -24,12 +24,3 @@ Full-stack chess website starter with:
 - `POST /api/game/move` - submit a chess move
 - `GET /api/health` - service health
 
-## Multiplayer later
-
-The backend already includes:
-
-- `GameService` abstraction (game storage / rules)
-- `socket.io` server bootstrap
-- `multiplayerGateway.js` event registration placeholder
-
-To add multiplayer later, connect socket events to game creation/join flow and broadcast validated moves from `GameService`.
