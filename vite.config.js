@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: '',
+  base: '/ChessWeb/',
   server: {
     proxy: {
       "/api": "http://localhost:3000",
