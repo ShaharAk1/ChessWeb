@@ -1,6 +1,8 @@
 import "./styles.css";
 import { Chess } from "chess.js";
 
+console.log("ChessWeb app starting");
+
 const FILLED_GLYPHS = {
   wp: "♟",
   wr: "♜",
