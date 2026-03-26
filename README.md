@@ -2,10 +2,10 @@
 
 Full-stack chess website starter with:
 
-- Local play mode (same player controls both colors)
-- Big centered 8x8 board UI
-- Node.js backend API for game state and move validation
-- Socket.io gateway scaffold for future multiplayer support
+- Local play mode
+- Multiplayer mode
+- Openings tab (studying openings, right now 6 openings exist and could be learned)
+- Improve tab (still under development and does not contain anything right now.)
 
 ## Run
 
@@ -16,6 +16,9 @@ Full-stack chess website starter with:
    - `npm run dev`
 4. Open:
    - [http://localhost:5173](http://localhost:5173)
+### OR
+Join the github pages on the web at https://shaharak1.github.io/ChessWeb/#/local
+
 
 ## API (current)
 
