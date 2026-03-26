@@ -54,6 +54,15 @@ const BOARD_THEMES = [
   { name: "Walnut", light: "#e8dcc8", dark: "#8b6914", border: "#4a3728" }
 ];
 
+const OPENINGS = [
+  { name: "Sicilian Defense", eco: "B20", moves: "e4 c5", description: "A sharp opening where Black fights for the center with c5." },
+  { name: "Queen's Gambit", eco: "D06", moves: "d4 d5 c4", description: "White offers a pawn to gain central control." },
+  { name: "King's Indian Defense", eco: "E60", moves: "d4 Nf6 c4 g6", description: "Black fianchettoes the king bishop and prepares counterplay." },
+  { name: "Ruy Lopez", eco: "C60", moves: "e4 e5 Nf3 Nc6 Bb5", description: "One of the oldest and most respected openings." },
+  { name: "French Defense", eco: "C00", moves: "e4 e6", description: "Black builds a solid pawn structure but cedes space." },
+  { name: "Caro-Kann Defense", eco: "B10", moves: "e4 c6", description: "A solid defense aiming for d5." }
+];
+
 function toBoardMap(chess) {
   const board = {};
   const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -127,6 +136,11 @@ const PAGE_ROUTES = {
     hash: "#/openings",
     title: "ChessWeb - Openings",
     buttonText: "Openings"
+  },
+  improve: {
+    hash: "#/improve",
+    title: "ChessWeb - Improve",
+    buttonText: "Improve"
   }
 };
 
@@ -159,7 +173,7 @@ function getAudioContext() {
   return audioCtx;
 }
 
-function playTone({ frequency, type = "sine", duration = 0.09, volume = 0.04 }) {
+function playTone({ frequency, type = "sine", duration = 0.09, volume = 0.8 }) {
   const ctx = getAudioContext();
   if (!ctx) return;
 
@@ -168,9 +182,9 @@ function playTone({ frequency, type = "sine", duration = 0.09, volume = 0.04 }) 
   const gain = ctx.createGain();
   osc.type = type;
   osc.frequency.setValueAtTime(frequency, now);
-  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.setValueAtTime(0.001, now);
   gain.gain.exponentialRampToValueAtTime(volume, now + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
   osc.connect(gain);
   gain.connect(ctx.destination);
   osc.start(now);
@@ -227,7 +241,7 @@ function playMoveSound() {
 }
 
 function playButtonSound() {
-  playTone({ frequency: 360, type: "sine", duration: 0.05, volume: 0.025 });
+  playTone({ frequency: 360, type: "sine", duration: 0.05, volume: 0.2 });
 }
 
 function clampThemeIndex(value, max) {
@@ -734,19 +748,56 @@ function customizePanelHtml() {
     </div>`;
 }
 
+function miniOpeningBoardHtml(opening) {
+  const chess = new Chess();
+  const moveList = opening.moves.split(" ");
+  for (const move of moveList) {
+    chess.move(move);
+  }
+  const board = toBoardMap(chess);
+  const t = BOARD_THEMES[boardThemeIndex] ?? BOARD_THEMES[0];
+  let html = `<div class="mini-opening-board" data-moves="${opening.moves}" title="Load ${opening.name} opening">`;
+  const ranks = [8, 7, 6, 5, 4, 3, 2, 1];
+  const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
+  ranks.forEach((rank, rankIdx) => {
+    files.forEach((file, fileIdx) => {
+      const square = `${file}${rank}`;
+      const piece = board[square];
+      let pieceHtml = "";
+      if (piece) {
+        const pieceGlyph = getPieceGlyph(piece.color, piece.type, pieceThemeIndex);
+        const pieceColorClass = piece.color === "w" ? "mini-piece-white" : "mini-piece-black";
+        pieceHtml = `<span class="mini-piece ${pieceColorClass}">${pieceGlyph}</span>`;
+      }
+      const light = (fileIdx + rankIdx) % 2 === 0;
+      const bg = light ? t.light : t.dark;
+      html += `<div class="mini-square" style="background:${bg}">${pieceHtml}</div>`;
+    });
+  });
+  html += `</div>`;
+  return html;
+}
+
+function openingItemHtml(opening) {
+  return `
+    <div class="opening-item">
+      <h3>${opening.name}</h3>
+      ${miniOpeningBoardHtml(opening)}
+    </div>`;
+}
+
 function render() {
   const pageKey = currentPageKey();
   const page = PAGE_ROUTES[pageKey];
   const canRenderBoard = Boolean(gameState);
+  const notification = !canRenderBoard ? `<div class="notification" style="position:fixed;top:0;left:28%;background:#550080;color:#fff;text-align:center;padding:0.7rem;z-index:1000;font-size:1.2rem;opacity:0.8;width:30%;border-radius:2px">${
+    pageKey === "multiplayer"
+      ? "Create or join a multiplayer game to start."
+      : "Loading game..."
+  }</div>` : '';
   const boardSection = canRenderBoard
     ? boardHtml(gameState)
-    : `<div class="board" ${boardStyleAttrs()} style="display:flex;align-items:center;justify-content:center;">
-         <p class="status" style="text-align:center;padding:1rem;">${
-           pageKey === "multiplayer"
-             ? "Create or join a multiplayer game to start."
-             : "Loading game..."
-         }</p>
-       </div>`;
+    : `<div class="board" ${boardStyleAttrs()}></div>`;
   if (canRenderBoard) maybeOpenOutcomeModal(gameState);
   const statusLine = canRenderBoard
     ? `<p class="status"><strong>Status:</strong> ${statusText(gameState)}</p>`
@@ -771,11 +822,12 @@ function render() {
     .join("");
 
   app.innerHTML = `
-    ${customizePanelHtml()}
+    ${notification}${customizePanelHtml()}
     <main class="layout">
       <section class="board-wrap">
         ${boardSection}
       </section>
+      ${ pageKey !== "openings" ? `
       <aside class="panel">
         <h1>${page.title}</h1>
         ${statusLine}
@@ -788,7 +840,13 @@ function render() {
               : "This mode uses an independent board state saved per page."
           }
         </p>
+      </aside>`: `
+      <aside class="panel openings">
+        <h1>Openings</h1>
+        <p class="future-note">Select an opening to load it on the board.</p>
+        <div class="openings-table">${OPENINGS.map(openingItemHtml).join("")}</div>
       </aside>
+      `}
     </main>
     <nav class="sidebar" aria-label="Navigation">
       ${navHtml}
@@ -982,6 +1040,25 @@ function render() {
       render();
     });
   }
+
+  app.querySelectorAll(".mini-opening-board").forEach((board) => {
+    board.addEventListener("click", async () => {
+      playButtonSound();
+      const moves = board.dataset.moves;
+      try {
+        await startGame();
+        const chess = localGames[gameId].engine;
+        const moveList = moves.split(" ");
+        for (const move of moveList) {
+          chess.move(move);
+        }
+        gameState = toState(localGames[gameId]);
+        render();
+      } catch (error) {
+        alert(`Failed to load opening: ${error.message}`);
+      }
+    });
+  });
 
   app.querySelectorAll(".nav-button").forEach((button) => {
     button.addEventListener("click", () => {
