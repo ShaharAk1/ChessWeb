@@ -157,6 +157,8 @@ let audioCtx = null;
 let playerId = null;
 let multiplayerSession = null;
 let multiplayerPollTimer = null;
+let outcomeModal = null;
+const dismissedOutcomeSignatures = new Set();
 let selectedOpening = null;
 let currentMoveIndex = 0;
 
