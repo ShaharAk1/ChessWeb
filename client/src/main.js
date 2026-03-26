@@ -157,8 +157,8 @@ let audioCtx = null;
 let playerId = null;
 let multiplayerSession = null;
 let multiplayerPollTimer = null;
-let outcomeModal = null;
-const dismissedOutcomeSignatures = new Set();
+let selectedOpening = null;
+let currentMoveIndex = 0;
 
 function getAudioContext() {
   if (typeof window === "undefined") return null;
@@ -842,7 +842,11 @@ function render() {
         </p>
       </aside>`: `
       <aside class="panel openings">
-        <h1>Openings</h1>
+        <h1>${selectedOpening ? selectedOpening.name : "Openings"}</h1>
+        ${selectedOpening ? `<div class="opening-nav">
+          <button type="button" id="prev-move" title="Previous move">&larr;</button>
+          <button type="button" id="next-move" title="Next move">&rarr;</button>
+        </div>` : ''}
         <p class="future-note">Select an opening to load it on the board.</p>
         <div class="openings-table">${OPENINGS.map(openingItemHtml).join("")}</div>
       </aside>
@@ -1045,20 +1049,55 @@ function render() {
     board.addEventListener("click", async () => {
       playButtonSound();
       const moves = board.dataset.moves;
+      const opening = OPENINGS.find(o => o.moves === moves);
+      selectedOpening = opening;
+      currentMoveIndex = 0;
       try {
         await startGame();
-        const chess = localGames[gameId].engine;
+        // Apply moves up to currentMoveIndex (0 initially)
+        const game = localGames[gameId];
         const moveList = moves.split(" ");
-        for (const move of moveList) {
-          chess.move(move);
+        for (let i = 0; i < currentMoveIndex; i++) {
+          game.engine.move(moveList[i]);
         }
-        gameState = toState(localGames[gameId]);
+        gameState = toState(game);
         render();
       } catch (error) {
         alert(`Failed to load opening: ${error.message}`);
       }
     });
   });
+
+  const prevBtn = app.querySelector("#prev-move");
+  if (prevBtn) {
+    prevBtn.addEventListener("click", () => {
+      playButtonSound();
+      if (selectedOpening && currentMoveIndex > 0) {
+        const game = localGames[gameId];
+        game.engine.undo();
+        currentMoveIndex--;
+        gameState = toState(game);
+        render();
+      }
+    });
+  }
+
+  const nextBtn = app.querySelector("#next-move");
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      playButtonSound();
+      if (selectedOpening) {
+        const moveList = selectedOpening.moves.split(" ");
+        if (currentMoveIndex < moveList.length) {
+          const game = localGames[gameId];
+          game.engine.move(moveList[currentMoveIndex]);
+          currentMoveIndex++;
+          gameState = toState(game);
+          render();
+        }
+      }
+    });
+  }
 
   app.querySelectorAll(".nav-button").forEach((button) => {
     button.addEventListener("click", () => {
